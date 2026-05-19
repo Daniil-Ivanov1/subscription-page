@@ -2,6 +2,16 @@ GNU AFFERO GENERAL PUBLIC LICENSE
 Version 3, 9 January 2025
 
 Copyright (C) 2025 Remnawave <https://github.com/remnawave>
+
+Modified version — changes from original:
+- Added "Auto-select" (Автовыбор) server feature: scores servers by
+  connected users, TCP ping, and system load, prepending the best
+  server link to subscription output.
+- Modified: backend/src/common/axios/axios.service.ts
+- Modified: backend/src/modules/root/root.service.ts
+- Modified: backend/src/modules/root/root.module.ts
+- Added: backend/src/modules/root/auto-select.service.ts
+
 Everyone is permitted to copy and distribute verbatim copies
 of this license document, but changing it is not allowed.
 

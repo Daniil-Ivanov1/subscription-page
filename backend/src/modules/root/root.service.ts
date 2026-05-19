@@ -13,6 +13,7 @@ import { AxiosService } from '@common/axios/axios.service';
 import { IGNORED_HEADERS } from '@common/constants';
 import { sanitizeUsername } from '@common/utils';
 
+import { AutoSelectService } from './auto-select.service';
 import { SubpageConfigService } from './subpage-config.service';
 
 @Injectable()
@@ -22,11 +23,15 @@ export class RootService {
     private readonly isMarzbanLegacyLinkEnabled: boolean;
     private readonly marzbanSecretKeys: string[];
     private readonly mlDropRevokedSubscriptions: boolean;
+
+    private readonly linksCache = new Map<string, { links: string[]; updatedAt: number }>();
+    private static readonly LINKS_CACHE_TTL = 300_000; // 5 minutes
     constructor(
         private readonly configService: ConfigService,
         private readonly jwtService: JwtService,
         private readonly axiosService: AxiosService,
         private readonly subpageConfigService: SubpageConfigService,
+        private readonly autoSelectService: AutoSelectService,
     ) {
         this.isMarzbanLegacyLinkEnabled = this.configService.getOrThrow<boolean>(
             'MARZBAN_LEGACY_LINK_ENABLED',
@@ -117,6 +122,50 @@ export class RootService {
                     .forEach(([key, value]) => {
                         res.setHeader(key, value);
                     });
+            }
+
+            if (!clientType && typeof subscriptionDataResponse.response === 'string') {
+                try {
+                    const cached = this.linksCache.get(shortUuidLocal);
+                    let links = cached?.links;
+
+                    if (!links || links.length === 0) {
+                        const infoResponse = await this.axiosService.getSubscriptionInfo(
+                            clientIp,
+                            shortUuidLocal,
+                        );
+                        if (infoResponse.isOk && infoResponse.response?.response?.links?.length) {
+                            links = infoResponse.response.response.links;
+                            this.linksCache.set(shortUuidLocal, {
+                                links,
+                                updatedAt: Date.now(),
+                            });
+                        }
+                    }
+
+                    if (links && links.length > 0) {
+                        const bestLink = this.autoSelectService.getBestLink(links);
+
+                        if (bestLink) {
+                            let decoded: string;
+                            try {
+                                decoded = Buffer.from(
+                                    subscriptionDataResponse.response,
+                                    'base64',
+                                ).toString('utf-8');
+                            } catch {
+                                decoded = subscriptionDataResponse.response;
+                            }
+
+                            const modified = bestLink + '\n' + decoded;
+                            subscriptionDataResponse.response = Buffer.from(modified).toString(
+                                'base64',
+                            );
+                        }
+                    }
+                } catch (error) {
+                    this.logger.debug('Auto-select for client subscription failed:', error);
+                }
             }
 
             res.status(200).send(subscriptionDataResponse.response);
@@ -216,6 +265,20 @@ export class RootService {
             if (!baseSettings.showConnectionKeys) {
                 subscriptionData.response.links = [];
                 subscriptionData.response.ssConfLinks = {};
+            }
+
+            if (subscriptionData.response.links.length > 0) {
+                const bestLink = this.autoSelectService.getBestLink(
+                    subscriptionData.response.links,
+                );
+                if (bestLink) {
+                    subscriptionData.response.links.unshift(bestLink);
+                }
+
+                this.linksCache.set(shortUuid, {
+                    links: subscriptionData.response.links.slice(bestLink ? 1 : 0),
+                    updatedAt: Date.now(),
+                });
             }
 
             res.cookie('session', this.generateJwtForCookie(subpageConfig.subpageConfigUuid), {

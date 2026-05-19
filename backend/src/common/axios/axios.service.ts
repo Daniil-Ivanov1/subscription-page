@@ -13,6 +13,8 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import {
+    GetAllHostsCommand,
+    GetAllNodesCommand,
     GetMetadataCommand,
     GetSubpageConfigByShortUuidCommand,
     GetSubscriptionInfoByShortUuidCommand,
@@ -333,6 +335,50 @@ export class AxiosService implements OnModuleInit {
             }
 
             return null;
+        }
+    }
+
+    public async getAllNodes(): Promise<ICommandResponse<GetAllNodesCommand.Response['response']>> {
+        try {
+            const response = await this.axiosInstance.request<GetAllNodesCommand.Response>({
+                method: GetAllNodesCommand.endpointDetails.REQUEST_METHOD,
+                url: GetAllNodesCommand.url,
+            });
+
+            return {
+                isOk: true,
+                response: response.data.response,
+            };
+        } catch (error) {
+            if (error instanceof AxiosError) {
+                this.logger.error('Error in GetAllNodes Request:', error.message);
+            } else {
+                this.logger.error('Error in GetAllNodes Request:', error);
+            }
+
+            return { isOk: false };
+        }
+    }
+
+    public async getAllHosts(): Promise<ICommandResponse<GetAllHostsCommand.Response['response']>> {
+        try {
+            const response = await this.axiosInstance.request<GetAllHostsCommand.Response>({
+                method: GetAllHostsCommand.endpointDetails.REQUEST_METHOD,
+                url: GetAllHostsCommand.url,
+            });
+
+            return {
+                isOk: true,
+                response: response.data.response,
+            };
+        } catch (error) {
+            if (error instanceof AxiosError) {
+                this.logger.error('Error in GetAllHosts Request:', error.message);
+            } else {
+                this.logger.error('Error in GetAllHosts Request:', error);
+            }
+
+            return { isOk: false };
         }
     }
 }
